@@ -5,6 +5,10 @@ file at build time — no backend needed to serve it.
 Visual direction follows the "sunny." reference screenshots: dual dark/light theme,
 portal intro, gradient accents, mono detail type, rounded cards.
 
+I host my portfolio as a static React build using S3 and CloudFront because it 
+doesn't require a runtime backend. Route 53 handles DNS and ACM provides TLS. 
+For applications that require Node.js, PHP, or PostgreSQL, I deploy those separately on EC2.
+
 ## Run it
 
 ```bash
