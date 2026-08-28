@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# SSH / private keys
+*.pem
+*.key
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Generated at build time from server/data/profile.js
+client/public/api/

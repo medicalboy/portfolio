@@ -1,0 +1,246 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Static site hosting for the portfolio: private S3 origin, CloudFront distribution
+  with an ACM certificate, Route 53 alias records, and a www -> apex redirect.
+  MUST be deployed in us-east-1 because CloudFront only reads certificates from there.
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: Apex domain you bought, with no scheme and no www (e.g. wilsonli.dev).
+    AllowedPattern: '^[a-z0-9-]+(\.[a-z0-9-]+)+$'
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Description: Route 53 hosted zone that is authoritative for DomainName.
+
+Resources:
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    # Keep the bucket if the stack is ever torn down, so a mistake does not wipe the site.
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub '${DomainName}-site'
+      # No public access at all — CloudFront reaches the bucket via OAC.
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${SiteBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt SiteBucket.Arn
+              - !Sub '${SiteBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
+
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      SubjectAlternativeNames:
+        - !Sub 'www.${DomainName}'
+      ValidationMethod: DNS
+      # Giving the zone id lets ACM write its own validation records, so the
+      # stack validates automatically instead of waiting on a manual step.
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+        - DomainName: !Sub 'www.${DomainName}'
+          HostedZoneId: !Ref HostedZoneId
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${DomainName}-oac'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  RedirectFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub '${AWS::StackName}-www-redirect'
+      AutoPublish: true
+      FunctionConfig:
+        Comment: 301 www.example.com -> example.com
+        Runtime: cloudfront-js-2.0
+      FunctionCode: !Sub |
+        function handler(event) {
+          var request = event.request;
+          var host = request.headers.host ? request.headers.host.value : '';
+          if (host !== 'www.${DomainName}') {
+            return request;
+          }
+          var query = '';
+          var keys = Object.keys(request.querystring || {});
+          if (keys.length) {
+            var parts = [];
+            for (var i = 0; i < keys.length; i++) {
+              var v = request.querystring[keys[i]].value;
+              parts.push(v === '' ? keys[i] : keys[i] + '=' + v);
+            }
+            query = '?' + parts.join('&');
+          }
+          return {
+            statusCode: 301,
+            statusDescription: 'Moved Permanently',
+            headers: {
+              location: { value: 'https://${DomainName}' + request.uri + query }
+            }
+          };
+        }
+
+  SecurityHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub '${AWS::StackName}-security-headers'
+        SecurityHeadersConfig:
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+            Preload: false
+            Override: true
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          XSSProtection:
+            Protection: true
+            ModeBlock: true
+            Override: true
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub 'Portfolio site for ${DomainName}'
+        Aliases:
+          - !Ref DomainName
+          - !Sub 'www.${DomainName}'
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        # Australia and NZ edges only exist in PriceClass_All; the cost delta at
+        # portfolio traffic is cents.
+        PriceClass: PriceClass_All
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          # Managed-CachingOptimized
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt RedirectFunction.FunctionARN
+        # The client is a single-page app, so unknown paths hand back index.html
+        # instead of an S3 XML error page.
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 10
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 10
+        ViewerCertificate:
+          AcmCertificateArn: !Ref Certificate
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+
+  ApexRecords:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      # Z2FDTNDATAQYW2 is the fixed alias zone id shared by every CloudFront distribution.
+      RecordSets:
+        - Name: !Ref DomainName
+          Type: A
+          AliasTarget:
+            HostedZoneId: Z2FDTNDATAQYW2
+            DNSName: !GetAtt Distribution.DomainName
+            EvaluateTargetHealth: false
+        - Name: !Ref DomainName
+          Type: AAAA
+          AliasTarget:
+            HostedZoneId: Z2FDTNDATAQYW2
+            DNSName: !GetAtt Distribution.DomainName
+            EvaluateTargetHealth: false
+        - Name: !Sub 'www.${DomainName}'
+          Type: A
+          AliasTarget:
+            HostedZoneId: Z2FDTNDATAQYW2
+            DNSName: !GetAtt Distribution.DomainName
+            EvaluateTargetHealth: false
+        - Name: !Sub 'www.${DomainName}'
+          Type: AAAA
+          AliasTarget:
+            HostedZoneId: Z2FDTNDATAQYW2
+            DNSName: !GetAtt Distribution.DomainName
+            EvaluateTargetHealth: false
+
+Outputs:
+  BucketName:
+    Description: S3 bucket the built site is uploaded to.
+    Value: !Ref SiteBucket
+  DistributionId:
+    Description: CloudFront distribution id, used for cache invalidation.
+    Value: !Ref Distribution
+  DistributionDomainName:
+    Description: CloudFront hostname, useful for testing before DNS propagates.
+    Value: !GetAtt Distribution.DomainName
+  SiteUrl:
+    Description: Public site URL.
+    Value: !Sub 'https://${DomainName}'
