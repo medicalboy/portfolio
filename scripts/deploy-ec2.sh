@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -e
 
 cd /home/ubuntu/portfolio
@@ -12,7 +11,12 @@ echo "Installing frontend dependencies..."
 cd /home/ubuntu/portfolio/client
 npm ci
 
-echo "Building frontend..."
+echo "Installing backend dependencies..."
+cd /home/ubuntu/portfolio/server
+npm ci
+
+echo "Building portfolio..."
+cd /home/ubuntu/portfolio
 npm run build
 
 echo "Deploying frontend to Apache..."
