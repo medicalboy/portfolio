@@ -103,6 +103,16 @@ export default function Projects({ projects }) {
                   {project.reference.label} →
                 </a>
               )}
+              {project.live && (
+                <a
+                  className="workCard__demo"
+                  href={project.live.href}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  {project.live.label} →
+                </a>
+              )}
             </article>
           ))}
         </div>

@@ -170,7 +170,12 @@ export const profile = {
         body:
           'Server-side build on PHP and CodeIgniter over SQL Server, in an MVC three-tier architecture. Users upload videos and add them to a wishlist inside their own study centre, with Ajax linking client and server. Designed in Figma first, then built out with Bootstrap.',
         stack: ['PHP', 'CodeIgniter', 'SQL Server', 'Bootstrap', 'Figma'],
+        live: {
+          label: 'View live website',
+          href: 'https://learning.wilsonli3.com',
+        },
       },
+      
     ],
   },
 
