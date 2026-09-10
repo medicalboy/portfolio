@@ -5,7 +5,7 @@ export const profile = {
   person: {
     name: 'Wilson Li',
     role: 'Software Engineer',
-    location: 'Sydney, Australia',
+    location: 'Australia',
     availability: 'Available now',
     email: 'lihao020118@gmail.com',
     phone: '0432 068 802',
@@ -39,10 +39,9 @@ export const profile = {
     paragraphs: [
       'For two years I worked on a 24/7 platform of sensors and mobile apps used in high-care nursing homes — the kind of system where a missed event matters to a real person that night. That shaped how I work: test the release, read the logs, and check the data actually arrived.',
       'My background runs both ways across the stack. Python, Flask and the AWS serverless stack on the back end; TypeScript, React and Django on the front. Alongside that I do the data work — SQL, Python, dashboards and reports that people make decisions from.',
-      'I finished a Master of Information Technology at the University of Queensland in the top 10% of my faculty, with research interests in deep learning and virtual reality. I am in Sydney, available immediately, and looking for a full-stack or backend role.',
+      'I finished a Master of Information Technology at the University of Queensland in the top 10% of my faculty, with research interests in deep learning and virtual reality. I am available immediately, and looking for a full-stack or backend role.',
     ],
     facts: [
-      { label: 'Based in', value: 'Ryde, Sydney' },
       { label: 'Availability', value: 'Immediate' },
       { label: 'Degree', value: 'Master of IT, UQ (2023)' },
       { label: 'Focus', value: 'Full-stack · Cloud · Data' },
@@ -93,12 +92,12 @@ export const profile = {
         company: 'JB Hi-Fi',
         title: 'Team Member',
         type: 'Part time',
-        place: 'Sydney',
+        place: '',
         start: 'Sep 2025',
         end: 'Present',
         months: 11,
         summary:
-          'Customer-facing retail role in Sydney while I look for my next engineering position.',
+          'Customer-facing retail role while I look for my next engineering position.',
         points: [],
         stack: [],
       },
@@ -210,7 +209,7 @@ export const profile = {
   contact: {
     eyebrow: 'Say hello',
     title: "Let's talk",
-    lead: 'I am in Sydney and available to start immediately. The fastest way to reach me is email.',
+    lead: 'I am available to start immediately. The fastest way to reach me is email.',
   },
 };
 
